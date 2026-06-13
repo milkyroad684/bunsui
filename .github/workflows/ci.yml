@@ -31,6 +31,9 @@ jobs:
       - name: JS engine tests
         run: node tests/run_tests.js
 
+      - name: Solver QA (全図 solvable を保証)
+        run: python tests/test_solver.py
+
       - name: Fail if build produced uncommitted changes
         run: |
           if ! git diff --quiet; then
