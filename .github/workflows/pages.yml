@@ -1,0 +1,37 @@
+name: Deploy Pages
+
+# dist/bunsui.html を GitHub Pages のトップページとして配信する。
+# 生成物はリポジトリを汚さないため、配信時に index.html へコピーするだけにする。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時に複数走らないようにし、最新だけを反映する。
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage site (bunsui.html を index.html として配置)
+        run: |
+          mkdir -p _site
+          cp dist/bunsui.html _site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
