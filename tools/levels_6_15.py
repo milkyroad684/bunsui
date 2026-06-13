@@ -1,9 +1,10 @@
 """Levels 6-15 — ten new levels built on the three pillars:
 divisibility, timing synchronization, hypothesis formation."""
 import json
+import copy
 import random
 import zlib
-from engine import P, SRC, TANK, check, check_initial_not_solved, simulate
+from engine import BASE, P, SRC, TANK, check, check_initial_not_solved, simulate
 
 
 def stable_seed(tag):
@@ -217,22 +218,75 @@ S15 = {"1,3": 1, "2,3": 1,
        "1,5": 2, "1,6": 0, "2,6": 3, "2,5": 1, "3,5": 2, "3,6": 0,
        "4,6": 1, "5,6": 1}
 
+# ---------------------------------------------------------------- L16 hard L15
+L16 = copy.deepcopy(L15)
+L16["name"] = "16. 三源の重奏"
+L16["goal"] = ("三つの水源から三つのタンクへ。構造は交響図に似ているが、"
+               "初期回転が遠く、全ての分岐と合流をもう一度組み直す必要がある。")
+L16["hard_offset"] = 3
+S16 = dict(S15)
+
+
+# ---------------------------------------------------------------- L17 mirrored hard L15
+DIR_MIRROR_X = {0: 0, 1: 3, 2: 2, 3: 1}
+
+
+def mirrored_rot(kind, rot):
+    target = sorted(DIR_MIRROR_X[(d + rot) % 4] for d in BASE[kind])
+    for r in range(4):
+        if sorted((d + r) % 4 for d in BASE[kind]) == target:
+            return r
+    raise ValueError(f"cannot mirror {kind} rot={rot}")
+
+
+def mirror_level_x(level, sol):
+    out = copy.deepcopy(level)
+    out["cells"] = {}
+    mirrored_sol = {}
+    width = level["w"]
+    for k, c in level["cells"].items():
+        x, y = map(int, k.split(","))
+        nk = f"{width - 1 - x},{y}"
+        nc = copy.deepcopy(c)
+        if nc["t"] == "src":
+            nc["dir"] = DIR_MIRROR_X[nc["dir"]]
+        elif nc["t"] == "pipe":
+            nc["rot"] = mirrored_rot(nc["kind"], nc["rot"])
+        out["cells"][nk] = nc
+    for k, rot in sol.items():
+        x, y = map(int, k.split(","))
+        c = level["cells"][k]
+        mirrored_sol[f"{width - 1 - x},{y}"] = mirrored_rot(c["kind"], rot)
+    return out, mirrored_sol
+
+
+L17, S17 = mirror_level_x(L15, S15)
+L17["name"] = "17. 鏡像の三源"
+L17["goal"] = ("三源の交響を左右反転した難問。見慣れた合流規則でも、"
+               "入口と出口の向きが反転すると手順の見通しが崩れる。")
+L17["hard_offset"] = 3
+
 NEW = [("L6", L6, S6), ("L7", L7, S7), ("L8", L8, S8), ("L9", L9, S9),
        ("L10", L10, S10), ("L11", L11, S11), ("L12", L12, S12),
-       ("L13", L13, S13), ("L14", L14, S14), ("L15", L15, S15)]
+       ("L13", L13, S13), ("L14", L14, S14), ("L15", L15, S15),
+       ("L16", L16, S16), ("L17", L17, S17)]
 
 
 def scramble(level, sol, seed):
     """Deterministic initial rotations: differ from the solution on solution
     cells, pseudo-random on decoys. Mutates level cells in place."""
     rng = random.Random(seed)
+    hard_offset = level.get("hard_offset")
     for k, c in level["cells"].items():
         if c["t"] != "pipe":
             continue
         if k in sol:
-            offs = [1, 2, 3]
-            rng.shuffle(offs)
-            c["rot"] = (sol[k] + offs[0]) % 4
+            if hard_offset:
+                c["rot"] = (sol[k] - hard_offset) % 4
+            else:
+                offs = [1, 2, 3]
+                rng.shuffle(offs)
+                c["rot"] = (sol[k] + offs[0]) % 4
         else:
             c["rot"] = rng.randrange(4)
 
