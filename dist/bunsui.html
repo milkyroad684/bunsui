@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>分水 BUNSUI — 配管設計パズル</title>
+<style>
+:root{
+  --desk:#0B1E36; --paper:#16395F; --paper-deep:#102C4B; --ink:#0A1B30;
+  --line:#DCEAF7; --line-dim:rgba(220,234,247,.38); --grid:rgba(220,234,247,.10);
+  --water:#6FD4F2; --water-deep:#2E9CC8; --brass:#D8A14B; --mint:#8FE3BC;
+  --vermilion:#F1603D; --hanko:#E84A2F; --win:#8FE3BC;
+  --mincho:"Hiragino Mincho ProN","Yu Mincho","Noto Serif CJK JP",serif;
+  --gothic:"Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans CJK JP","Meiryo",sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono","Courier New",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--desk);color:var(--line);font-family:var(--gothic);font-size:15px;line-height:1.7}
+a{color:var(--water)}
+button{font-family:var(--gothic);font-size:14px;color:var(--line);background:transparent;
+  border:1px solid var(--line-dim);border-radius:4px;padding:7px 14px;cursor:pointer}
+button:hover{border-color:var(--line);background:rgba(220,234,247,.06)}
+button:focus-visible,select:focus-visible,.sheet-item:focus-visible{outline:2px solid var(--water);outline-offset:2px}
+button:disabled{opacity:.4;cursor:default}
+button.primary{border-color:var(--water);color:var(--water)}
+button.primary:hover{background:rgba(111,212,242,.1)}
+select{font-family:var(--gothic);font-size:13px;color:var(--line);background:var(--paper-deep);
+  border:1px solid var(--line-dim);border-radius:4px;padding:6px 8px}
+
+header{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;
+  padding:18px 26px 14px;border-bottom:1px solid rgba(220,234,247,.16)}
+.brand{font-family:var(--mincho);font-size:30px;font-weight:500;letter-spacing:.14em}
+.romaji{font-family:var(--mono);font-size:12px;letter-spacing:.42em;color:var(--line-dim)}
+.tagline{font-size:13px;color:var(--line-dim)}
+.progress{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--brass)}
+
+.app{display:grid;grid-template-columns:228px 1fr;min-height:calc(100vh - 70px)}
+aside{background:var(--paper-deep);border-right:1px solid rgba(220,234,247,.14);padding:14px 0}
+.sheet-item{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:none;border-radius:0;
+  padding:9px 16px;font-size:13.5px;color:var(--line);background:transparent}
+.sheet-item:hover{background:rgba(220,234,247,.06)}
+.sheet-item.active{background:rgba(111,212,242,.12);box-shadow:inset 3px 0 0 var(--water)}
+.sheet-no{font-family:var(--mono);font-size:12px;color:var(--line-dim);min-width:38px}
+.sheet-item.active .sheet-no{color:var(--water)}
+.sheet-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stamp-mini{font-family:var(--mincho);font-size:11px;color:var(--hanko);border:1.5px solid var(--hanko);
+  border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;
+  transform:rotate(-8deg);flex:none}
+
+main{padding:22px 28px 40px;max-width:980px}
+.goal{max-width:720px;margin:0 0 14px;color:var(--line);font-size:14.5px}
+.goal b{font-weight:500;color:var(--brass)}
+.board-wrap{margin:0 0 14px}
+svg{display:block;width:100%;max-width:760px;height:auto;user-select:none}
+.cell-hit{cursor:pointer}
+.cell-hit:hover+.hover-ring,{opacity:1}
+
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px}
+.tick{font-family:var(--mono);font-size:13px;color:var(--line-dim);min-width:90px}
+.msg{font-size:14.5px;min-height:26px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.msg.fail{color:var(--vermilion)}
+.msg.win{color:var(--win)}
+.kbd-note{font-size:12px;color:var(--line-dim);margin-top:4px}
+kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line-dim);border-radius:3px;padding:0 5px}
+
+details{max-width:760px;margin-top:26px;border:1px solid rgba(220,234,247,.16);border-radius:6px;padding:12px 16px}
+summary{cursor:pointer;font-size:14px;color:var(--line)}
+details p{margin:10px 0 0;font-size:13.5px;color:var(--line);max-width:66ch}
+details p span.t{color:var(--brass)}
+
+@media (max-width:760px){
+  .app{grid-template-columns:1fr}
+  aside{display:flex;overflow-x:auto;border-right:none;border-bottom:1px solid rgba(220,234,247,.14);padding:6px}
+  .sheet-item{width:auto;flex:none;border-radius:4px}
+  .sheet-name{max-width:9em}
+  main{padding:16px 14px 32px}
+}
+@media (prefers-reduced-motion:no-preference){
+  .stamp-anim{animation:stamp .38s cubic-bezier(.2,1.6,.4,1) both}
+  @keyframes stamp{from{transform:scale(2.4) rotate(-8deg);opacity:0}to{transform:scale(1) rotate(-8deg);opacity:1}}
+}
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">分水</span>
+  <span class="romaji">B U N S U I</span>
+  <span class="tagline">整除・同着・仮説 — 給排水設計演習 十五図</span>
+  <span class="progress" id="progress"></span>
+</header>
+<div class="app">
+  <aside id="sheets" aria-label="図面一覧"></aside>
+  <main>
+    <p class="goal" id="goal"></p>
+    <div class="board-wrap" id="board"></div>
+    <div class="controls">
+      <button class="primary" id="run">▶ 通水</button>
+      <button id="step">⏵ 一歩</button>
+      <button id="drain">↺ 水を抜く</button>
+      <button id="reset">⟲ 初期配置</button>
+      <label style="font-size:13px;color:var(--line-dim)">速度
+        <select id="speed">
+          <option value="650">ゆっくり</option>
+          <option value="420" selected>標準</option>
+          <option value="240">速い</option>
+        </select>
+      </label>
+      <span class="tick" id="tick"></span>
+    </div>
+    <div class="msg" id="msg" role="status"></div>
+    <p class="kbd-note"><kbd>Space</kbd> 通水/停止　<kbd>S</kbd> 一歩　<kbd>R</kbd> 水を抜く　パイプはクリックで90°回転</p>
+    <details>
+      <summary>水の掟（ルール詳説）</summary>
+      <p><span class="t">部品。</span>直管 I は向かい合う二口、曲管 L は隣り合う二口、三方管 T は三口、十字管 X は四口。水源とタンクは回転できない。</p>
+      <p><span class="t">流れ。</span>水は整数単位の塊として、1ティックに1マス進む。塊が部品に入ると、入ってきた口を除く残りの口へ均等に分かれる。割り切れなければ破裂。出口がなければ行き止まり。口のない面に当たれば漏水。</p>
+      <p><span class="t">合流。</span>複数の塊が同じティックに同じ部品へ着いたときだけ合算される。1ティックでもずれれば、すれ違いの正面衝突や思わぬ分流が起きる。経路長 = 到着ティック。図面の縮尺は「1マス = 1ティック」。</p>
+      <p><span class="t">脈動水源。</span>「2×3 / T4」とあれば、2単位の塊を4ティックおきに3回送り出す。すべての波が同じ配管を通る。</p>
+      <p><span class="t">完成条件。</span>すべてのタンクが要求量ぴったりで、盤上に水が残っていないこと。多くても少なくても不合格。使われないパイプがあっても、水さえ入らなければ問題ない。</p>
+    </details>
+  </main>
+</div>
+<script>
+"use strict";
+const LEVELS=[{"name":"1. はじめの配管","goal":"水源（緑）の4単位を、パイプを回転させてタンクまで導こう。要求は4ぴったり。","w":6,"h":5,"cells":{"0,2":{"t":"src","dir":1,"units":4},"5,2":{"t":"tank","need":4},"1,2":{"t":"pipe","kind":"L","rot":0},"1,1":{"t":"pipe","kind":"L","rot":3},"2,1":{"t":"pipe","kind":"I","rot":0},"3,1":{"t":"pipe","kind":"I","rot":0},"4,1":{"t":"pipe","kind":"L","rot":0},"4,2":{"t":"pipe","kind":"L","rot":2},"2,3":{"t":"pipe","kind":"L","rot":1},"3,3":{"t":"pipe","kind":"I","rot":0}}},{"name":"2. 二手に分ける","goal":"4単位をT字管で分流して、2つのタンクに2ずつ届けよう。T字管は入ってきた水を残りの口へ均等に分ける。","w":7,"h":5,"cells":{"0,2":{"t":"src","dir":1,"units":4},"6,1":{"t":"tank","need":2},"6,3":{"t":"tank","need":2},"1,2":{"t":"pipe","kind":"I","rot":0},"2,2":{"t":"pipe","kind":"I","rot":0},"3,2":{"t":"pipe","kind":"T","rot":0},"3,1":{"t":"pipe","kind":"L","rot":0},"4,1":{"t":"pipe","kind":"I","rot":0},"5,1":{"t":"pipe","kind":"I","rot":0},"3,3":{"t":"pipe","kind":"L","rot":2},"4,3":{"t":"pipe","kind":"I","rot":0},"5,3":{"t":"pipe","kind":"I","rot":0},"4,2":{"t":"pipe","kind":"L","rot":0}}},{"name":"3. 合流と分流","goal":"4と2を合流させてから3ずつに分流。合流が成立するのは、両方の水が同じティックにT字管へ着いたときだけ。","w":7,"h":5,"cells":{"0,0":{"t":"src","dir":1,"units":4},"0,4":{"t":"src","dir":1,"units":2},"6,1":{"t":"tank","need":3},"6,3":{"t":"tank","need":3},"1,0":{"t":"pipe","kind":"I","rot":0},"2,0":{"t":"pipe","kind":"I","rot":0},"3,0":{"t":"pipe","kind":"L","rot":0},"3,1":{"t":"pipe","kind":"I","rot":1},"1,4":{"t":"pipe","kind":"I","rot":0},"2,4":{"t":"pipe","kind":"I","rot":0},"3,4":{"t":"pipe","kind":"L","rot":0},"3,3":{"t":"pipe","kind":"I","rot":1},"3,2":{"t":"pipe","kind":"T","rot":0},"4,2":{"t":"pipe","kind":"I","rot":0},"5,2":{"t":"pipe","kind":"T","rot":1},"5,1":{"t":"pipe","kind":"L","rot":0},"5,3":{"t":"pipe","kind":"L","rot":2}}},{"name":"4. 時間差の罠","goal":"6と2を同着で合わせて8に。その8を4と4に、片方をさらに2と2へ。タンクは4・2・2。最短経路が正解とは限らない。","w":8,"h":5,"cells":{"0,0":{"t":"src","dir":1,"units":6},"0,2":{"t":"src","dir":1,"units":2},"6,0":{"t":"tank","need":4},"4,4":{"t":"tank","need":2},"7,4":{"t":"tank","need":2},"1,0":{"t":"pipe","kind":"I","rot":0},"2,0":{"t":"pipe","kind":"I","rot":0},"3,0":{"t":"pipe","kind":"I","rot":0},"4,0":{"t":"pipe","kind":"L","rot":0},"4,1":{"t":"pipe","kind":"I","rot":1},"1,2":{"t":"pipe","kind":"L","rot":0},"1,3":{"t":"pipe","kind":"L","rot":2},"2,3":{"t":"pipe","kind":"L","rot":1},"2,2":{"t":"pipe","kind":"L","rot":3},"3,2":{"t":"pipe","kind":"I","rot":0},"4,2":{"t":"pipe","kind":"T","rot":0},"5,2":{"t":"pipe","kind":"I","rot":0},"6,2":{"t":"pipe","kind":"T","rot":3},"6,1":{"t":"pipe","kind":"I","rot":1},"6,3":{"t":"pipe","kind":"I","rot":1},"6,4":{"t":"pipe","kind":"T","rot":0},"5,4":{"t":"pipe","kind":"I","rot":0},"3,1":{"t":"pipe","kind":"L","rot":0},"5,1":{"t":"pipe","kind":"L","rot":0},"5,3":{"t":"pipe","kind":"L","rot":0},"7,2":{"t":"pipe","kind":"L","rot":0}}},{"name":"5. 三と五","goal":"水源は6と2、タンクは3と5。8はどう割っても3と5にならない。どのT字管に「割る」役と「合わせる」役を与えるかは君が決める。正解はひとつではない。","w":9,"h":6,"cells":{"0,1":{"t":"src","dir":1,"units":6},"0,5":{"t":"src","dir":1,"units":2},"8,1":{"t":"tank","need":3},"8,4":{"t":"tank","need":5},"1,1":{"t":"pipe","kind":"I","rot":0},"2,1":{"t":"pipe","kind":"T","rot":0},"2,0":{"t":"pipe","kind":"L","rot":0},"3,0":{"t":"pipe","kind":"I","rot":0},"4,0":{"t":"pipe","kind":"I","rot":0},"5,0":{"t":"pipe","kind":"I","rot":0},"6,0":{"t":"pipe","kind":"I","rot":0},"7,0":{"t":"pipe","kind":"L","rot":0},"7,1":{"t":"pipe","kind":"L","rot":2},"2,2":{"t":"pipe","kind":"I","rot":1},"2,3":{"t":"pipe","kind":"L","rot":2},"3,3":{"t":"pipe","kind":"I","rot":0},"3,1":{"t":"pipe","kind":"I","rot":0},"4,1":{"t":"pipe","kind":"L","rot":0},"4,2":{"t":"pipe","kind":"I","rot":0},"3,2":{"t":"pipe","kind":"L","rot":0},"5,1":{"t":"pipe","kind":"T","rot":0},"6,1":{"t":"pipe","kind":"L","rot":0},"5,2":{"t":"pipe","kind":"L","rot":0},"4,3":{"t":"pipe","kind":"T","rot":2},"1,5":{"t":"pipe","kind":"I","rot":0},"2,5":{"t":"pipe","kind":"I","rot":0},"3,5":{"t":"pipe","kind":"I","rot":0},"4,5":{"t":"pipe","kind":"L","rot":0},"4,4":{"t":"pipe","kind":"I","rot":1},"3,4":{"t":"pipe","kind":"L","rot":0},"5,4":{"t":"pipe","kind":"L","rot":0},"5,3":{"t":"pipe","kind":"I","rot":0},"6,3":{"t":"pipe","kind":"I","rot":0},"7,3":{"t":"pipe","kind":"L","rot":0},"7,4":{"t":"pipe","kind":"L","rot":2}}},{"name":"6. 自己合流","goal":"8単位を割り、片割れ同士をもう一度出会わせる。タンクは6と2。同じ水源から分かれた流れでも、合流の掟（同着）は変わらない。","w":8,"h":5,"cells":{"0,2":{"t":"src","dir":1,"units":8},"0,4":{"t":"tank","need":2},"7,3":{"t":"tank","need":6},"1,2":{"t":"pipe","kind":"I","rot":3},"2,2":{"t":"pipe","kind":"T","rot":3},"2,1":{"t":"pipe","kind":"L","rot":3},"3,1":{"t":"pipe","kind":"I","rot":0},"4,1":{"t":"pipe","kind":"I","rot":0},"5,1":{"t":"pipe","kind":"L","rot":0},"5,2":{"t":"pipe","kind":"I","rot":1},"2,3":{"t":"pipe","kind":"I","rot":1},"2,4":{"t":"pipe","kind":"T","rot":1},"1,4":{"t":"pipe","kind":"I","rot":3},"3,4":{"t":"pipe","kind":"I","rot":3},"4,4":{"t":"pipe","kind":"I","rot":0},"5,4":{"t":"pipe","kind":"L","rot":0},"5,3":{"t":"pipe","kind":"T","rot":2},"6,3":{"t":"pipe","kind":"I","rot":0},"3,2":{"t":"pipe","kind":"L","rot":1},"3,3":{"t":"pipe","kind":"L","rot":1},"4,2":{"t":"pipe","kind":"T","rot":2},"4,3":{"t":"pipe","kind":"L","rot":1},"1,1":{"t":"pipe","kind":"L","rot":3},"6,2":{"t":"pipe","kind":"L","rot":0},"6,4":{"t":"pipe","kind":"L","rot":0},"1,3":{"t":"pipe","kind":"I","rot":0}}},{"name":"7. 二重の同着","goal":"三つの水源（2・2・4）。2と2を合わせて4、その4をさらに4と合わせて8、最後に4と4へ。同着の連鎖をつくれ。","w":8,"h":6,"cells":{"0,0":{"t":"src","dir":1,"units":2},"0,2":{"t":"src","dir":1,"units":2},"0,4":{"t":"src","dir":1,"units":4},"7,2":{"t":"tank","need":4},"7,4":{"t":"tank","need":4},"1,0":{"t":"pipe","kind":"I","rot":0},"2,0":{"t":"pipe","kind":"I","rot":3},"3,0":{"t":"pipe","kind":"I","rot":2},"4,0":{"t":"pipe","kind":"L","rot":3},"1,2":{"t":"pipe","kind":"I","rot":3},"2,2":{"t":"pipe","kind":"I","rot":2},"3,2":{"t":"pipe","kind":"I","rot":3},"4,2":{"t":"pipe","kind":"L","rot":2},"4,1":{"t":"pipe","kind":"T","rot":2},"5,1":{"t":"pipe","kind":"I","rot":0},"6,1":{"t":"pipe","kind":"L","rot":1},"6,2":{"t":"pipe","kind":"I","rot":3},"6,3":{"t":"pipe","kind":"T","rot":0},"7,3":{"t":"pipe","kind":"T","rot":3},"1,4":{"t":"pipe","kind":"I","rot":0},"2,4":{"t":"pipe","kind":"I","rot":0},"3,4":{"t":"pipe","kind":"L","rot":0},"3,5":{"t":"pipe","kind":"L","rot":2},"4,5":{"t":"pipe","kind":"L","rot":2},"4,4":{"t":"pipe","kind":"L","rot":3},"5,4":{"t":"pipe","kind":"I","rot":2},"6,4":{"t":"pipe","kind":"L","rot":0},"5,0":{"t":"pipe","kind":"I","rot":2},"5,2":{"t":"pipe","kind":"L","rot":0},"5,3":{"t":"pipe","kind":"L","rot":1},"2,1":{"t":"pipe","kind":"L","rot":0},"2,3":{"t":"pipe","kind":"L","rot":1},"7,1":{"t":"pipe","kind":"L","rot":0},"1,1":{"t":"pipe","kind":"I","rot":2},"1,3":{"t":"pipe","kind":"L","rot":0}}},{"name":"8. 九と三","goal":"12単位から9と3を量り出す。9は一度では作れない数。割ってから、戻すしかない。","w":8,"h":6,"cells":{"0,1":{"t":"src","dir":1,"units":12},"7,2":{"t":"tank","need":9},"2,5":{"t":"tank","need":3},"1,1":{"t":"pipe","kind":"I","rot":0},"2,1":{"t":"pipe","kind":"T","rot":2},"3,0":{"t":"pipe","kind":"I","rot":0},"4,0":{"t":"pipe","kind":"I","rot":3},"5,0":{"t":"pipe","kind":"I","rot":0},"6,0":{"t":"pipe","kind":"L","rot":1},"6,1":{"t":"pipe","kind":"I","rot":3},"2,2":{"t":"pipe","kind":"I","rot":1},"2,3":{"t":"pipe","kind":"T","rot":1},"2,4":{"t":"pipe","kind":"I","rot":1},"3,3":{"t":"pipe","kind":"I","rot":0},"4,3":{"t":"pipe","kind":"I","rot":2},"5,3":{"t":"pipe","kind":"I","rot":0},"6,3":{"t":"pipe","kind":"L","rot":1},"6,2":{"t":"pipe","kind":"T","rot":0},"2,0":{"t":"pipe","kind":"L","rot":0},"1,2":{"t":"pipe","kind":"L","rot":3},"3,1":{"t":"pipe","kind":"L","rot":3},"4,1":{"t":"pipe","kind":"T","rot":0},"5,1":{"t":"pipe","kind":"L","rot":1},"3,2":{"t":"pipe","kind":"L","rot":1},"4,2":{"t":"pipe","kind":"L","rot":3},"5,2":{"t":"pipe","kind":"I","rot":3},"1,3":{"t":"pipe","kind":"L","rot":1},"1,4":{"t":"pipe","kind":"I","rot":1},"3,4":{"t":"pipe","kind":"L","rot":1},"4,4":{"t":"pipe","kind":"L","rot":3},"5,4":{"t":"pipe","kind":"L","rot":1},"6,4":{"t":"pipe","kind":"L","rot":3},"7,3":{"t":"pipe","kind":"L","rot":1},"7,1":{"t":"pipe","kind":"L","rot":1}}},{"name":"9. 三つ子の交差点","goal":"新しい部品、十字管（X）。一方向から入った水は残り三方向へ均等に割れる。9単位を3・3・3に。T字管では9は割れない。","w":8,"h":6,"cells":{"0,2":{"t":"src","dir":1,"units":9},"6,0":{"t":"tank","need":3},"7,2":{"t":"tank","need":3},"6,5":{"t":"tank","need":3},"1,2":{"t":"pipe","kind":"I","rot":2},"2,2":{"t":"pipe","kind":"I","rot":2},"3,2":{"t":"pipe","kind":"X","rot":3},"3,1":{"t":"pipe","kind":"I","rot":1},"3,0":{"t":"pipe","kind":"L","rot":3},"4,0":{"t":"pipe","kind":"I","rot":3},"5,0":{"t":"pipe","kind":"I","rot":0},"4,2":{"t":"pipe","kind":"I","rot":0},"5,2":{"t":"pipe","kind":"I","rot":2},"6,2":{"t":"pipe","kind":"I","rot":3},"3,3":{"t":"pipe","kind":"I","rot":1},"3,4":{"t":"pipe","kind":"L","rot":1},"4,4":{"t":"pipe","kind":"I","rot":0},"5,4":{"t":"pipe","kind":"L","rot":0},"5,5":{"t":"pipe","kind":"L","rot":3},"2,1":{"t":"pipe","kind":"T","rot":1},"4,3":{"t":"pipe","kind":"T","rot":2},"2,3":{"t":"pipe","kind":"L","rot":3},"4,1":{"t":"pipe","kind":"L","rot":0},"5,1":{"t":"pipe","kind":"L","rot":3},"5,3":{"t":"pipe","kind":"L","rot":1},"2,0":{"t":"pipe","kind":"L","rot":0},"6,1":{"t":"pipe","kind":"L","rot":1},"6,3":{"t":"pipe","kind":"L","rot":1},"6,4":{"t":"pipe","kind":"L","rot":2},"4,5":{"t":"pipe","kind":"L","rot":3},"2,4":{"t":"pipe","kind":"I","rot":1},"1,1":{"t":"pipe","kind":"L","rot":3}}},{"name":"10. 交差の錬金術","goal":"4と2の水源、タンクは3と3。十字管に二つの流れが同着すると、残り二方向へ合算が均等に割れる——つまり平均が生まれる。","w":8,"h":6,"cells":{"6,0":{"t":"src","dir":2,"units":4},"0,4":{"t":"src","dir":1,"units":2},"7,3":{"t":"tank","need":3},"0,3":{"t":"tank","need":3},"6,1":{"t":"pipe","kind":"L","rot":1},"5,1":{"t":"pipe","kind":"I","rot":0},"4,1":{"t":"pipe","kind":"I","rot":3},"3,1":{"t":"pipe","kind":"L","rot":3},"3,2":{"t":"pipe","kind":"I","rot":2},"1,4":{"t":"pipe","kind":"L","rot":1},"1,5":{"t":"pipe","kind":"L","rot":1},"2,5":{"t":"pipe","kind":"L","rot":2},"2,4":{"t":"pipe","kind":"L","rot":3},"3,4":{"t":"pipe","kind":"L","rot":1},"3,3":{"t":"pipe","kind":"X","rot":3},"4,3":{"t":"pipe","kind":"I","rot":3},"5,3":{"t":"pipe","kind":"I","rot":2},"6,3":{"t":"pipe","kind":"I","rot":0},"2,3":{"t":"pipe","kind":"I","rot":3},"1,3":{"t":"pipe","kind":"I","rot":3},"2,2":{"t":"pipe","kind":"T","rot":1},"5,2":{"t":"pipe","kind":"T","rot":1},"4,2":{"t":"pipe","kind":"L","rot":1},"4,4":{"t":"pipe","kind":"L","rot":3},"5,4":{"t":"pipe","kind":"L","rot":2},"2,1":{"t":"pipe","kind":"L","rot":3},"1,1":{"t":"pipe","kind":"L","rot":3},"6,2":{"t":"pipe","kind":"L","rot":0},"1,2":{"t":"pipe","kind":"I","rot":0},"4,5":{"t":"pipe","kind":"L","rot":1},"5,5":{"t":"pipe","kind":"L","rot":0},"6,4":{"t":"pipe","kind":"L","rot":1}}},{"name":"11. 十二の家系図","goal":"12単位を6・4・2へ。十字で三つに割り、T字でさらに割り、離れた兄弟をもう一度引き合わせる。","w":9,"h":6,"cells":{"0,2":{"t":"src","dir":1,"units":12},"8,2":{"t":"tank","need":6},"6,3":{"t":"tank","need":4},"1,5":{"t":"tank","need":2},"1,2":{"t":"pipe","kind":"I","rot":2},"2,2":{"t":"pipe","kind":"X","rot":2},"3,2":{"t":"pipe","kind":"I","rot":0},"4,2":{"t":"pipe","kind":"L","rot":0},"4,3":{"t":"pipe","kind":"L","rot":3},"5,3":{"t":"pipe","kind":"I","rot":2},"2,3":{"t":"pipe","kind":"I","rot":1},"2,4":{"t":"pipe","kind":"T","rot":0},"1,4":{"t":"pipe","kind":"L","rot":2},"3,4":{"t":"pipe","kind":"I","rot":0},"4,4":{"t":"pipe","kind":"I","rot":0},"5,4":{"t":"pipe","kind":"I","rot":0},"6,4":{"t":"pipe","kind":"I","rot":3},"7,4":{"t":"pipe","kind":"L","rot":1},"7,3":{"t":"pipe","kind":"I","rot":1},"2,1":{"t":"pipe","kind":"I","rot":1},"2,0":{"t":"pipe","kind":"L","rot":0},"3,0":{"t":"pipe","kind":"I","rot":0},"4,0":{"t":"pipe","kind":"I","rot":2},"5,0":{"t":"pipe","kind":"I","rot":3},"6,0":{"t":"pipe","kind":"I","rot":2},"7,0":{"t":"pipe","kind":"L","rot":3},"7,1":{"t":"pipe","kind":"I","rot":2},"7,2":{"t":"pipe","kind":"T","rot":2},"5,1":{"t":"pipe","kind":"L","rot":0},"6,1":{"t":"pipe","kind":"T","rot":0},"5,2":{"t":"pipe","kind":"L","rot":0},"6,2":{"t":"pipe","kind":"L","rot":2},"3,1":{"t":"pipe","kind":"L","rot":0},"4,1":{"t":"pipe","kind":"I","rot":1},"3,3":{"t":"pipe","kind":"L","rot":0},"3,5":{"t":"pipe","kind":"L","rot":0},"5,5":{"t":"pipe","kind":"L","rot":3},"6,5":{"t":"pipe","kind":"L","rot":1},"8,1":{"t":"pipe","kind":"L","rot":3},"8,3":{"t":"pipe","kind":"L","rot":1}}},{"name":"12. 波状給水","goal":"新しい水源、脈動水源。2単位の塊を3ティックおきに3回送り出す。一本の配管を、三つの波が順番に通る。","w":7,"h":5,"cells":{"0,2":{"t":"src","dir":1,"units":2,"count":3,"period":3},"6,1":{"t":"tank","need":3},"6,3":{"t":"tank","need":3},"1,2":{"t":"pipe","kind":"I","rot":2},"2,2":{"t":"pipe","kind":"I","rot":3},"3,2":{"t":"pipe","kind":"I","rot":2},"4,2":{"t":"pipe","kind":"T","rot":3},"4,1":{"t":"pipe","kind":"L","rot":3},"5,1":{"t":"pipe","kind":"I","rot":2},"4,3":{"t":"pipe","kind":"L","rot":2},"5,3":{"t":"pipe","kind":"I","rot":3},"2,1":{"t":"pipe","kind":"L","rot":3},"2,3":{"t":"pipe","kind":"L","rot":1},"5,2":{"t":"pipe","kind":"L","rot":2},"3,1":{"t":"pipe","kind":"I","rot":3},"3,3":{"t":"pipe","kind":"I","rot":2},"1,1":{"t":"pipe","kind":"L","rot":2},"1,3":{"t":"pipe","kind":"L","rot":0}}},{"name":"13. 位相合わせ","goal":"2×3発と4×3発、周期はどちらも4。波の一発ごとに同着させ、6の波を三度つくって9と9へ。最初の一発がずれれば全てが崩れる。","w":8,"h":6,"cells":{"0,1":{"t":"src","dir":1,"units":2,"count":3,"period":4},"0,5":{"t":"src","dir":1,"units":4,"count":3,"period":4},"6,0":{"t":"tank","need":9},"6,4":{"t":"tank","need":9},"1,1":{"t":"pipe","kind":"L","rot":0},"1,2":{"t":"pipe","kind":"L","rot":3},"2,2":{"t":"pipe","kind":"L","rot":0},"2,1":{"t":"pipe","kind":"L","rot":0},"3,1":{"t":"pipe","kind":"I","rot":0},"4,1":{"t":"pipe","kind":"L","rot":0},"1,5":{"t":"pipe","kind":"I","rot":3},"2,5":{"t":"pipe","kind":"I","rot":0},"3,5":{"t":"pipe","kind":"I","rot":3},"4,5":{"t":"pipe","kind":"L","rot":2},"4,4":{"t":"pipe","kind":"I","rot":1},"4,3":{"t":"pipe","kind":"I","rot":1},"4,2":{"t":"pipe","kind":"T","rot":0},"5,2":{"t":"pipe","kind":"I","rot":2},"6,2":{"t":"pipe","kind":"T","rot":0},"6,1":{"t":"pipe","kind":"I","rot":1},"6,3":{"t":"pipe","kind":"I","rot":2},"2,3":{"t":"pipe","kind":"L","rot":1},"3,3":{"t":"pipe","kind":"L","rot":1},"3,2":{"t":"pipe","kind":"L","rot":2},"5,1":{"t":"pipe","kind":"L","rot":2},"5,3":{"t":"pipe","kind":"L","rot":1},"2,4":{"t":"pipe","kind":"L","rot":3},"3,4":{"t":"pipe","kind":"I","rot":3},"1,3":{"t":"pipe","kind":"I","rot":2},"1,4":{"t":"pipe","kind":"L","rot":1},"5,4":{"t":"pipe","kind":"L","rot":2},"7,2":{"t":"pipe","kind":"L","rot":1}}},{"name":"14. 二拍の交差","goal":"脈動する4×2発と2×2発。波の一拍ごとに十字で同着させ、平均の3を二度ずつ両タンクへ。","w":7,"h":6,"cells":{"5,0":{"t":"src","dir":2,"units":4,"count":2,"period":5},"0,3":{"t":"src","dir":1,"units":2,"count":2,"period":5},"5,5":{"t":"tank","need":6},"6,3":{"t":"tank","need":6},"5,1":{"t":"pipe","kind":"L","rot":2},"4,1":{"t":"pipe","kind":"I","rot":3},"3,1":{"t":"pipe","kind":"L","rot":3},"3,2":{"t":"pipe","kind":"I","rot":3},"1,3":{"t":"pipe","kind":"L","rot":3},"1,4":{"t":"pipe","kind":"L","rot":3},"2,4":{"t":"pipe","kind":"L","rot":1},"2,3":{"t":"pipe","kind":"L","rot":3},"3,3":{"t":"pipe","kind":"X","rot":2},"3,4":{"t":"pipe","kind":"I","rot":2},"3,5":{"t":"pipe","kind":"L","rot":1},"4,5":{"t":"pipe","kind":"I","rot":2},"4,3":{"t":"pipe","kind":"I","rot":2},"5,3":{"t":"pipe","kind":"I","rot":3},"4,2":{"t":"pipe","kind":"T","rot":1},"2,2":{"t":"pipe","kind":"L","rot":0},"4,4":{"t":"pipe","kind":"L","rot":2},"2,1":{"t":"pipe","kind":"L","rot":1},"5,2":{"t":"pipe","kind":"L","rot":3},"1,2":{"t":"pipe","kind":"I","rot":1},"2,5":{"t":"pipe","kind":"L","rot":1},"4,0":{"t":"pipe","kind":"I","rot":2},"6,4":{"t":"pipe","kind":"L","rot":1},"1,5":{"t":"pipe","kind":"L","rot":1}}},{"name":"15. 三源の交響","goal":"8・2・2の三水源から6・4・2の三タンクへ。割る、揃える、合わせる——ここまでの全てを一枚の盤で。","w":9,"h":7,"cells":{"0,3":{"t":"src","dir":1,"units":8},"0,1":{"t":"src","dir":1,"units":2},"0,5":{"t":"src","dir":1,"units":2},"8,2":{"t":"tank","need":6},"7,3":{"t":"tank","need":2},"8,6":{"t":"tank","need":4},"1,3":{"t":"pipe","kind":"I","rot":0},"2,3":{"t":"pipe","kind":"T","rot":3},"2,2":{"t":"pipe","kind":"L","rot":3},"3,2":{"t":"pipe","kind":"I","rot":3},"4,2":{"t":"pipe","kind":"I","rot":3},"5,2":{"t":"pipe","kind":"I","rot":3},"6,2":{"t":"pipe","kind":"T","rot":0},"7,2":{"t":"pipe","kind":"I","rot":3},"1,1":{"t":"pipe","kind":"I","rot":2},"2,1":{"t":"pipe","kind":"I","rot":2},"3,1":{"t":"pipe","kind":"I","rot":3},"4,1":{"t":"pipe","kind":"I","rot":2},"5,1":{"t":"pipe","kind":"I","rot":0},"6,1":{"t":"pipe","kind":"L","rot":0},"2,4":{"t":"pipe","kind":"L","rot":2},"3,4":{"t":"pipe","kind":"I","rot":3},"4,4":{"t":"pipe","kind":"T","rot":3},"4,3":{"t":"pipe","kind":"L","rot":2},"5,3":{"t":"pipe","kind":"I","rot":3},"6,3":{"t":"pipe","kind":"I","rot":3},"4,5":{"t":"pipe","kind":"L","rot":1},"5,5":{"t":"pipe","kind":"I","rot":2},"6,5":{"t":"pipe","kind":"L","rot":3},"6,6":{"t":"pipe","kind":"T","rot":1},"7,6":{"t":"pipe","kind":"I","rot":3},"1,5":{"t":"pipe","kind":"L","rot":1},"1,6":{"t":"pipe","kind":"L","rot":2},"2,6":{"t":"pipe","kind":"L","rot":0},"2,5":{"t":"pipe","kind":"L","rot":2},"3,5":{"t":"pipe","kind":"L","rot":3},"3,6":{"t":"pipe","kind":"L","rot":3},"4,6":{"t":"pipe","kind":"I","rot":2},"5,6":{"t":"pipe","kind":"I","rot":0},"2,0":{"t":"pipe","kind":"L","rot":0},"4,0":{"t":"pipe","kind":"T","rot":3},"6,0":{"t":"pipe","kind":"L","rot":1},"3,0":{"t":"pipe","kind":"I","rot":1},"1,2":{"t":"pipe","kind":"L","rot":0},"1,4":{"t":"pipe","kind":"L","rot":1},"3,3":{"t":"pipe","kind":"L","rot":1},"5,4":{"t":"pipe","kind":"L","rot":2},"6,4":{"t":"pipe","kind":"L","rot":0},"7,4":{"t":"pipe","kind":"L","rot":2},"7,5":{"t":"pipe","kind":"I","rot":2},"7,1":{"t":"pipe","kind":"L","rot":2}}}];
+/* 分水 BUNSUI — discrete flow engine (canonical).
+ * Shared by the browser game (inlined at build time) and the Node test runner.
+ * Mirror of tools/engine.py — keep both in sync; tests/run_tests.js checks parity.
+ *
+ * Dirs: 0=N 1=E 2=S 3=W.  Pieces rotate by rot*90deg.
+ * One resolution per tick; merges only on simultaneous arrival (same tick, same cell).
+ */
+const DX=[0,1,0,-1],DY=[-1,0,1,0],BASE={I:[0,2],L:[0,1],T:[1,2,3],X:[0,1,2,3]};
+function conns(c){return BASE[c.kind].map(d=>(d+c.rot)%4)}
+function newSim(level,rots){
+  const cells={};
+  for(const k in level.cells){cells[k]=Object.assign({},level.cells[k]);
+    if(cells[k].t==="tank")cells[k].fill=0;
+    if(rots&&rots[k]!==undefined)cells[k].rot=rots[k];}
+  const srcs=[];let lastEmit=0;
+  for(const k in cells){const c=cells[k];
+    if(c.t==="src"){const p=k.split(",");srcs.push({x:+p[0],y:+p[1],c});
+      lastEmit=Math.max(lastEmit,((c.count||1)-1)*(c.period||1));}}
+  function emit(t){const out=[];
+    for(const s of srcs){const per=s.c.period||1,cnt=s.c.count||1;
+      if(t%per===0&&t/per<cnt){const d=s.c.dir;
+        out.push({x:s.x+DX[d],y:s.y+DY[d],frm:(d+2)%4,units:s.c.units});}}
+    return out;}
+  return{cells,emit,lastEmit,tick:0,packets:emit(0),done:false};
+}
+function stepSim(sim){
+  sim.tick++;const wet=[];
+  if(sim.tick>300){sim.done=true;return{fail:{msg:"タイムアウト：水が循環している？",x:-1,y:-1},wet}}
+  const groups={};
+  for(const p of sim.packets){const k=p.x+","+p.y;(groups[k]=groups[k]||[]).push(p);}
+  const moves=[];
+  for(const k in groups){
+    const g=groups[k],parts=k.split(","),x=+parts[0],y=+parts[1];
+    const total=g.reduce((s,p)=>s+p.units,0);const c=sim.cells[k];
+    if(!c){sim.done=true;return{fail:{msg:"漏水：パイプのない場所へ水があふれた",x,y},wet}}
+    if(c.t==="tank"){c.fill+=total;
+      if(c.fill>c.need){sim.done=true;return{fail:{msg:"あふれた：タンクは要求量ぴったりで止める",x,y},wet}}
+      continue;}
+    if(c.t==="src"){sim.done=true;return{fail:{msg:"逆流：水が水源へ戻った",x,y},wet}}
+    const cs=conns(c);
+    for(const p of g)if(!cs.includes(p.frm)){
+      sim.done=true;return{fail:{msg:"漏水：口の向きが水の来る向きと合っていない",x,y},wet}}
+    const inc=new Set(g.map(p=>p.frm));const outs=cs.filter(d=>!inc.has(d));
+    if(!outs.length){sim.done=true;return{fail:{msg:"行き止まり：出口がない",x,y},wet}}
+    if(total%outs.length){sim.done=true;
+      return{fail:{msg:"破裂："+total+"単位は"+outs.length+"方向に割り切れない",x,y},wet}}
+    const per=total/outs.length;wet.push({k,dirs:[...inc,...outs]});
+    for(const d of outs)moves.push({fx:x,fy:y,x:x+DX[d],y:y+DY[d],frm:(d+2)%4,units:per});
+  }
+  for(const a of moves)for(const b of moves)
+    if(a!==b&&a.x===b.fx&&a.y===b.fy&&b.x===a.fx&&b.y===a.fy){
+      sim.done=true;return{fail:{msg:"正面衝突：合流は同着のときだけ成立する",x:a.fx,y:a.fy},wet}}
+  sim.packets=moves.map(m=>({x:m.x,y:m.y,frm:m.frm,units:m.units}));
+  for(const p of sim.emit(sim.tick))sim.packets.push(p);
+  if(!sim.packets.length&&sim.tick>=sim.lastEmit){
+    sim.done=true;let ok=true;
+    for(const k in sim.cells){const c=sim.cells[k];if(c.t==="tank"&&c.fill!==c.need)ok=false;}
+    if(ok)return{win:true,wet};
+    return{fail:{msg:"水量不足：すべてのタンクをぴったり満たそう",x:-1,y:-1},wet};
+  }
+  return{wet};
+}
+
+
+const S=64,M=20,TB=54;
+const store={
+  get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+};
+let cleared=new Set(store.get("bunsui-cleared")||[]);
+let lv=Math.min(store.get("bunsui-last")||0,LEVELS.length-1);
+let rots={},sim=null,timer=null,wetMap={},failPos=null,won=false,msg="",msgKind="";
+
+function level(){return LEVELS[lv]}
+function pad2(n){return String(n+1).padStart(2,"0")}
+
+function initLevel(i){
+  stopTimer();lv=i;rots={};
+  const L=level();
+  for(const k in L.cells)if(L.cells[k].t==="pipe")rots[k]=L.cells[k].rot;
+  store.set("bunsui-last",lv);
+  drain();drawSheets();
+  document.getElementById("goal").innerHTML=level().goal.replace(/(\d+(?:×\d+)?)/g,"<b>$1</b>");
+}
+function drain(){stopTimer();sim=null;wetMap={};failPos=null;won=false;msg="";msgKind="";render()}
+function stopTimer(){if(timer){clearInterval(timer);timer=null}}
+function startSim(){if(!sim||sim.done){sim=newSim(level(),rots);wetMap={};failPos=null;won=false;msg="";msgKind="";
+  for(const k in sim.cells)if(sim.cells[k].t==="src")markWet(k,[sim.cells[k].dir]);}}
+function markWet(k,dirs){const w=(wetMap[k]=wetMap[k]||new Set());for(const d of dirs)w.add(d)}
+function doStep(){
+  if(!sim||sim.done)startSim();else{
+    const r=stepSim(sim);
+    for(const w of r.wet)markWet(w.k,w.dirs);
+    if(r.fail){failPos=r.fail.x>=0?{x:r.fail.x,y:r.fail.y}:null;msg=r.fail.msg;msgKind="fail";stopTimer()}
+    if(r.win){won=true;msg="合格。すべてのタンクがぴったり揃った。";msgKind="win";stopTimer();
+      if(!cleared.has(lv)){cleared.add(lv);store.set("bunsui-cleared",[...cleared])}}
+  }
+  render();
+}
+function toggleRun(){
+  if(timer){stopTimer();render();return}
+  startSim();render();
+  timer=setInterval(doStep,+document.getElementById("speed").value);
+}
+
+function pipePath(cx,cy,cs,col,sw){
+  let s='<circle cx="'+cx+'" cy="'+cy+'" r="'+(sw/2)+'" fill="'+col+'"/>';
+  for(const d of cs)s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+(cx+DX[d]*S/2)+'" y2="'+(cy+DY[d]*S/2)+
+    '" stroke="'+col+'" stroke-width="'+sw+'" stroke-linecap="round"/>';
+  return s;
+}
+function render(){
+  const L=level(),W=L.w*S,H=L.h*S,vw=W+M*2,vh=H+M*2+TB;
+  const cells=sim?sim.cells:L.cells;
+  let s="";
+  s+='<rect x="0" y="0" width="'+vw+'" height="'+vh+'" fill="var(--paper)"/>';
+  s+='<rect x="6" y="6" width="'+(vw-12)+'" height="'+(vh-12)+'" fill="none" stroke="var(--line-dim)" stroke-width="1"/>';
+  s+='<rect x="10" y="10" width="'+(vw-20)+'" height="'+(vh-20)+'" fill="none" stroke="var(--line-dim)" stroke-width="2"/>';
+  s+='<g transform="translate('+M+','+M+')">';
+  for(let x=0;x<=L.w;x++)s+='<line x1="'+(x*S)+'" y1="0" x2="'+(x*S)+'" y2="'+H+'" stroke="var(--grid)" stroke-width="1"/>';
+  for(let y=0;y<=L.h;y++)s+='<line x1="0" y1="'+(y*S)+'" x2="'+W+'" y2="'+(y*S)+'" stroke="var(--grid)" stroke-width="1"/>';
+  for(const k in cells){
+    const c=cells[k],p=k.split(","),x=+p[0],y=+p[1],cx=x*S+S/2,cy=y*S+S/2;
+    if(c.t==="pipe"){
+      const rot=sim?c.rot:(rots[k]!==undefined?rots[k]:c.rot);
+      const cs=BASE[c.kind].map(d=>(d+rot)%4);
+      s+='<rect x="'+(x*S+3)+'" y="'+(y*S+3)+'" width="'+(S-6)+'" height="'+(S-6)+'" rx="6" fill="rgba(220,234,247,.045)"/>';
+      s+=pipePath(cx,cy,cs,"var(--line)",12);
+      if(wetMap[k])s+=pipePath(cx,cy,[...wetMap[k]].filter(d=>cs.includes(d)),"var(--water)",5);
+    }
+    if(c.t==="src"){
+      s+='<circle cx="'+cx+'" cy="'+cy+'" r="23" fill="var(--paper-deep)" stroke="var(--mint)" stroke-width="2"/>';
+      s+='<circle cx="'+cx+'" cy="'+cy+'" r="19" fill="none" stroke="var(--mint)" stroke-width="1"/>';
+      if(wetMap[k])s+=pipePath(cx,cy,[...wetMap[k]],"var(--water)",5);
+      const lbl=(c.count||1)>1?c.units+"×"+c.count:String(c.units);
+      s+='<text x="'+cx+'" y="'+(cy+((c.count||1)>1?2:5))+'" text-anchor="middle" font-family="var(--mono)" font-size="'+((c.count||1)>1?13:16)+'" fill="var(--mint)">'+lbl+'</text>';
+      if((c.count||1)>1)s+='<text x="'+cx+'" y="'+(cy+15)+'" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--mint)">T'+c.period+'</text>';
+      const a=(c.dir-1)*90;
+      s+='<g transform="rotate('+a+' '+cx+' '+cy+')"><polygon points="'+(cx+24)+','+(cy-6)+' '+(cx+24)+','+(cy+6)+' '+(cx+31)+','+cy+'" fill="var(--mint)"/></g>';
+    }
+    if(c.t==="tank"){
+      const fill=c.fill||0,ih=S-26,r=Math.min(1,fill/c.need),wh=Math.round(ih*r);
+      s+='<rect x="'+(x*S+10)+'" y="'+(y*S+8)+'" width="'+(S-20)+'" height="'+(S-16)+'" fill="var(--paper-deep)" stroke="var(--brass)" stroke-width="2"/>';
+      s+='<rect x="'+(x*S+14)+'" y="'+(y*S+12)+'" width="'+(S-28)+'" height="'+(S-24)+'" fill="none" stroke="var(--brass)" stroke-width="1"/>';
+      if(wh>0)s+='<rect x="'+(x*S+16)+'" y="'+(y*S+13+(ih-wh))+'" width="'+(S-32)+'" height="'+wh+'" fill="var(--water-deep)"/>';
+      s+='<rect x="'+(cx-17)+'" y="'+(cy-8)+'" width="34" height="16" fill="var(--paper)" opacity=".92"/>';
+      s+='<text x="'+cx+'" y="'+(cy+4)+'" text-anchor="middle" font-family="var(--mono)" font-size="11.5" fill="var(--line)">'+fill+"/"+c.need+'</text>';
+    }
+  }
+  if(sim)for(const p of sim.packets){
+    const cx=p.x*S+S/2,cy=p.y*S+S/2;
+    s+='<circle cx="'+cx+'" cy="'+cy+'" r="13" fill="var(--water)" stroke="var(--paper)" stroke-width="2"/>';
+    s+='<text x="'+cx+'" y="'+(cy+4.5)+'" text-anchor="middle" font-family="var(--mono)" font-size="12.5" fill="var(--ink)">'+p.units+'</text>';
+  }
+  if(failPos){
+    const cx=failPos.x*S+S/2,cy=failPos.y*S+S/2;
+    s+='<circle cx="'+cx+'" cy="'+cy+'" r="24" fill="none" stroke="var(--vermilion)" stroke-width="2.5" stroke-dasharray="5 4"/>';
+  }
+  for(const k in cells)if(cells[k].t==="pipe"){
+    const p=k.split(","),x=+p[0],y=+p[1];
+    s+='<rect class="cell-hit" x="'+(x*S)+'" y="'+(y*S)+'" width="'+S+'" height="'+S+'" fill="transparent" data-c="'+k+'"><title>クリックで回転</title></rect>';
+  }
+  s+='</g>';
+  const tbx=vw-238,tby=vh-TB+6;
+  s+='<g font-family="var(--mono)">';
+  s+='<rect x="'+tbx+'" y="'+tby+'" width="222" height="38" fill="none" stroke="var(--line-dim)" stroke-width="1.5"/>';
+  s+='<line x1="'+(tbx+64)+'" y1="'+tby+'" x2="'+(tbx+64)+'" y2="'+(tby+38)+'" stroke="var(--line-dim)"/>';
+  s+='<line x1="'+(tbx+180)+'" y1="'+tby+'" x2="'+(tbx+180)+'" y2="'+(tby+38)+'" stroke="var(--line-dim)"/>';
+  s+='<text x="'+(tbx+8)+'" y="'+(tby+15)+'" font-size="8.5" fill="var(--line-dim)">図番</text>';
+  s+='<text x="'+(tbx+8)+'" y="'+(tby+30)+'" font-size="11.5" fill="var(--line)">BSN-'+pad2(lv)+'</text>';
+  s+='<text x="'+(tbx+72)+'" y="'+(tby+15)+'" font-size="8.5" fill="var(--line-dim)">名称／縮尺 1マス=1ティック</text>';
+  s+='<text x="'+(tbx+72)+'" y="'+(tby+30)+'" font-size="11.5" fill="var(--line)" font-family="var(--gothic)">'+level().name.replace(/^\d+\.\s*/,"")+'</text>';
+  s+='<text x="'+(tbx+190)+'" y="'+(tby+15)+'" font-size="8.5" fill="var(--line-dim)">検</text>';
+  if(cleared.has(lv)){
+    s+='<g class="stamp-anim" style="transform-origin:'+(tbx+201)+'px '+(tby+26)+'px">';
+    s+='<circle cx="'+(tbx+201)+'" cy="'+(tby+26)+'" r="10.5" fill="none" stroke="var(--hanko)" stroke-width="1.8"/>';
+    s+='<text x="'+(tbx+201)+'" y="'+(tby+30.5)+'" text-anchor="middle" font-size="12" fill="var(--hanko)" font-family="var(--mincho)">検</text></g>';
+  }
+  s+='</g>';
+  document.getElementById("board").innerHTML=
+    '<svg viewBox="0 0 '+vw+' '+vh+'" role="img" aria-label="'+level().name+' の図面">'+s+'</svg>';
+  document.getElementById("tick").textContent=sim?("TICK "+String(sim.tick).padStart(3,"0")):"TICK ---";
+  document.getElementById("run").textContent=timer?"■ 停止":"▶ 通水";
+  const m=document.getElementById("msg");m.className="msg "+msgKind;
+  m.innerHTML=msg?msg+(won&&lv<LEVELS.length-1?' <button id="next" class="primary">次の図面へ →</button>':""):"";
+  const nx=document.getElementById("next");if(nx)nx.addEventListener("click",()=>initLevel(lv+1));
+  document.getElementById("progress").textContent="検 "+cleared.size+" / "+LEVELS.length;
+}
+function drawSheets(){
+  const el=document.getElementById("sheets");
+  el.innerHTML=LEVELS.map((l,i)=>
+    '<button class="sheet-item'+(i===lv?" active":"")+'" data-i="'+i+'">'+
+    '<span class="sheet-no">図'+pad2(i)+'</span>'+
+    '<span class="sheet-name">'+l.name.replace(/^\d+\.\s*/,"")+'</span>'+
+    (cleared.has(i)?'<span class="stamp-mini">検</span>':"")+
+    '</button>').join("");
+  el.querySelectorAll(".sheet-item").forEach(b=>b.addEventListener("click",()=>initLevel(+b.dataset.i)));
+}
+document.getElementById("board").addEventListener("click",e=>{
+  if(timer)return;
+  const t=e.target.closest("[data-c]");if(!t)return;
+  const k=t.getAttribute("data-c");
+  sim=null;wetMap={};failPos=null;won=false;msg="";msgKind="";
+  rots[k]=((rots[k]!==undefined?rots[k]:level().cells[k].rot)+1)%4;
+  render();
+});
+document.getElementById("run").addEventListener("click",toggleRun);
+document.getElementById("step").addEventListener("click",()=>{if(!timer)doStep()});
+document.getElementById("drain").addEventListener("click",drain);
+document.getElementById("reset").addEventListener("click",()=>initLevel(lv));
+document.getElementById("speed").addEventListener("change",()=>{if(timer){stopTimer();toggleRun()}});
+document.addEventListener("keydown",e=>{
+  if(e.target.tagName==="SELECT")return;
+  if(e.code==="Space"){e.preventDefault();toggleRun()}
+  else if(e.key==="s"||e.key==="S"){if(!timer)doStep()}
+  else if(e.key==="r"||e.key==="R"){drain()}
+});
+initLevel(lv);
+</script>
+</body>
+</html>
