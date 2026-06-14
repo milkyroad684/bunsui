@@ -173,7 +173,7 @@ function stepSim(sim){
     if(!outs.length){sim.done=true;return{fail:{msg:"行き止まり：出口がない",x,y},wet}}
     if(total%outs.length){sim.done=true;
       return{fail:{msg:"破裂："+total+"単位は"+outs.length+"方向に割り切れない",x,y},wet}}
-    const per=total/outs.length;wet.push({k,dirs:[...inc,...outs]});
+    const per=total/outs.length;wet.push({k,dirs:[...inc,...outs],col:gcol});
     for(const d of outs)moves.push({fx:x,fy:y,x:x+DX[d],y:y+DY[d],frm:(d+2)%4,units:per,col:gcol});
   }
   for(const a of moves)for(const b of moves)
@@ -204,7 +204,7 @@ const store={
 };
 let cleared=new Set(store.get("bunsui-cleared")||[]);
 let lv=Math.min(store.get("bunsui-last")||0,LEVELS.length-1);
-let rots={},sim=null,timer=null,wetMap={},failPos=null,won=false,msg="",msgKind="";
+let rots={},sim=null,timer=null,wetMap={},wetCol={},failPos=null,won=false,msg="",msgKind="";
 
 function level(){return LEVELS[lv]}
 function pad2(n){return String(n+1).padStart(2,"0")}
@@ -217,15 +217,16 @@ function initLevel(i){
   drain();drawSheets();
   document.getElementById("goal").innerHTML=level().goal.replace(/(\d+(?:×\d+)?)/g,"<b>$1</b>");
 }
-function drain(){stopTimer();sim=null;wetMap={};failPos=null;won=false;msg="";msgKind="";render()}
+function drain(){stopTimer();sim=null;wetMap={};wetCol={};failPos=null;won=false;msg="";msgKind="";render()}
 function stopTimer(){if(timer){clearInterval(timer);timer=null}}
-function startSim(){if(!sim||sim.done){sim=newSim(level(),rots);wetMap={};failPos=null;won=false;msg="";msgKind="";
-  for(const k in sim.cells)if(sim.cells[k].t==="src")markWet(k,[sim.cells[k].dir]);}}
-function markWet(k,dirs){const w=(wetMap[k]=wetMap[k]||new Set());for(const d of dirs)w.add(d)}
+function startSim(){if(!sim||sim.done){sim=newSim(level(),rots);wetMap={};wetCol={};failPos=null;won=false;msg="";msgKind="";
+  for(const k in sim.cells)if(sim.cells[k].t==="src")markWet(k,[sim.cells[k].dir],sim.cells[k].col||0);}}
+function markWet(k,dirs,col){const w=(wetMap[k]=wetMap[k]||new Set());for(const d of dirs)w.add(d);
+  wetCol[k]=(wetCol[k]||0)|(col||0);}
 function doStep(){
   if(!sim||sim.done)startSim();else{
     const r=stepSim(sim);
-    for(const w of r.wet)markWet(w.k,w.dirs);
+    for(const w of r.wet)markWet(w.k,w.dirs,w.col);
     if(r.fail){failPos=r.fail.x>=0?{x:r.fail.x,y:r.fail.y}:null;msg=r.fail.msg;msgKind="fail";stopTimer()}
     if(r.win){won=true;msg="合格。すべてのタンクがぴったり揃った。";msgKind="win";stopTimer();
       if(!cleared.has(lv)){cleared.add(lv);store.set("bunsui-cleared",[...cleared])}}
@@ -261,7 +262,7 @@ function render(){
       const cs=BASE[c.kind].map(d=>(d+rot)%4);
       s+='<rect x="'+(x*S+3)+'" y="'+(y*S+3)+'" width="'+(S-6)+'" height="'+(S-6)+'" rx="6" fill="rgba(220,234,247,.045)"/>';
       s+=pipePath(cx,cy,cs,"var(--line)",12);
-      if(wetMap[k])s+=pipePath(cx,cy,[...wetMap[k]].filter(d=>cs.includes(d)),"var(--water)",5);
+      if(wetMap[k])s+=pipePath(cx,cy,[...wetMap[k]].filter(d=>cs.includes(d)),colOf(wetCol[k]),5);
     }
     if(c.t==="src"){
       const sc=c.col?colOf(c.col):"var(--mint)";

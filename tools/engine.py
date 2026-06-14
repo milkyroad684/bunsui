@@ -6,7 +6,9 @@ Semantics (must stay identical to the JS implementation):
 - Packets live "at" a cell with an incoming side `frm`; one resolution per tick.
 - Resolution per occupied cell (all packets in a cell are grouped):
     * no cell           -> FAIL leak
-    * tank              -> absorb; fill>need -> FAIL overflow
+    * tank              -> absorb (fill+=total, fillcol|=group color);
+                           fill>need -> FAIL overflow;
+                           need-color set & incoming carries an unwanted primary -> FAIL colorclash
     * src               -> FAIL backflow
     * pipe: every frm must be in conns else FAIL leak;
             outs = conns - incoming sides; outs empty -> FAIL deadend;
@@ -14,7 +16,11 @@ Semantics (must stay identical to the JS implementation):
 - After computing all moves, any pair swapping cells head-on -> FAIL collision.
 - Pulsed sources: emit `units` at global ticks 0, period, 2*period ... (count times).
   New pulse packets are added AFTER the move resolution of that tick.
-- Win: no packets, all pulses emitted, every tank fill == need.
+- Color: each packet carries a color (bits R=1, Y=2, B=4; 0 = plain water). A group's
+  color is the OR of its members; splits inherit it. Sources/tanks may set `col`
+  (0 = no color constraint, fully backward compatible with colorless levels).
+- Win: no packets, all pulses emitted, every tank fill == need AND
+  (tank has no need-color, or its accumulated fillcol == need-color).
 """
 
 DX = [0, 1, 0, -1]

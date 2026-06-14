@@ -47,7 +47,7 @@ function stepSim(sim){
     if(!outs.length){sim.done=true;return{fail:{msg:"行き止まり：出口がない",x,y},wet}}
     if(total%outs.length){sim.done=true;
       return{fail:{msg:"破裂："+total+"単位は"+outs.length+"方向に割り切れない",x,y},wet}}
-    const per=total/outs.length;wet.push({k,dirs:[...inc,...outs]});
+    const per=total/outs.length;wet.push({k,dirs:[...inc,...outs],col:gcol});
     for(const d of outs)moves.push({fx:x,fy:y,x:x+DX[d],y:y+DY[d],frm:(d+2)%4,units:per,col:gcol});
   }
   for(const a of moves)for(const b of moves)

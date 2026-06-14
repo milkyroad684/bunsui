@@ -21,7 +21,7 @@ from engine import DX, DY, conns
 Packet = Dict[str, int]
 Move = Dict[str, int]
 Rotations = Dict[str, int]
-Fill = Dict[str, int]
+Fill = Dict[str, Tuple[int, int]]  # tank key -> (amount, color bits)
 
 
 @dataclass
