@@ -61,7 +61,34 @@ L20 = {"w": 8, "h": 7, "name": "20. 三原色の大合奏",
 S20 = {"4,1": 0, "4,2": 0, "2,3": 1, "3,3": 1, "4,5": 0, "4,4": 0,
        "4,3": 0, "5,3": 1, "6,3": 0}
 
-NEW_COLOR = [("L18", L18, S18), ("L19", L19, S19), ("L20", L20, S20)]
+# ---------------------------------------------------------------- L21 the ring
+# A closed loop with 6 special T-junctions, alternating source / tank.
+# Each source splits its 4 both ways round the ring (2+2); every arc is 3 steps
+# long, so the two streams meeting at each tank arrive on the same tick and merge
+# into a secondary colour:  R+Y=橙, Y+B=緑, B+R=紫.  New idea: loop topology —
+# water travels round a ring, not down a tree.  Symmetry guarantees the timing.
+L21 = {"w": 8, "h": 7, "name": "21. 色の環・三対の同着",
+       "goal": "環（輪になった配管）。三つの水源が4を両方向へ2・2に分け、輪を回る。"
+               "隣り合う流れが各タンクで同着し、橙・緑・紫を同時に作り分ける。"
+               "分ける・揃える・混ぜるのすべてを一枚に。",
+       "cells": {
+    # sources (R top, Y right, B bottom) and the three secondary tanks
+    "2,0": SRC(2, 4, col=R), "7,3": SRC(3, 4, col=Y), "2,6": SRC(0, 4, col=B),
+    "5,0": TANK(4, col=O), "5,6": TANK(4, col=G), "0,3": TANK(4, col=Pp),
+    # the 18-cell ring, clockwise from the top-left corner
+    "1,1": P("L", 1), "2,1": P("T", 2), "3,1": P("I", 1), "4,1": P("I", 1),
+    "5,1": P("T", 2), "6,1": P("L", 2), "6,2": P("I", 0), "6,3": P("T", 3),
+    "6,4": P("I", 0), "6,5": P("L", 3), "5,5": P("T", 0), "4,5": P("I", 1),
+    "3,5": P("I", 1), "2,5": P("T", 0), "1,5": P("L", 0), "1,4": P("I", 0),
+    "1,3": P("T", 1), "1,2": P("I", 0),
+    # decoys (isolated interior pieces — never see water)
+    "3,3": P("X", 0), "4,3": P("T", 0), "3,2": P("L", 0)}}
+S21 = {"1,1": 1, "2,1": 2, "3,1": 1, "4,1": 1, "5,1": 2, "6,1": 2,
+       "6,2": 0, "6,3": 3, "6,4": 0, "6,5": 3, "5,5": 0, "4,5": 1,
+       "3,5": 1, "2,5": 0, "1,5": 0, "1,4": 0, "1,3": 1, "1,2": 0}
+
+NEW_COLOR = [("L18", L18, S18), ("L19", L19, S19), ("L20", L20, S20),
+             ("L21", L21, S21)]
 
 
 def scramble_color():
