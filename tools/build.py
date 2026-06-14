@@ -19,6 +19,7 @@ sys.path.insert(0, HERE)
 from engine import check, check_initial_not_solved  # noqa: E402
 from levels_1_5 import L1, S1, L2, S2, L3, S3, L4, S4, L5, S5a, S5b  # noqa: E402
 from levels_6_15 import NEW, scramble, stable_seed  # noqa: E402
+from levels_color import NEW_COLOR  # noqa: E402
 
 META_1_5 = [
     ("1. はじめの配管",
@@ -46,7 +47,7 @@ def build_levels():
         game.append({"name": name, "goal": goal, "w": lv["w"], "h": lv["h"],
                      "cells": lv["cells"]})
         qa.append({"name": name, "solutions": sols})
-    for tag, lv, sol in NEW:
+    for tag, lv, sol in NEW + NEW_COLOR:
         scramble(lv, sol, seed=stable_seed(tag))
         game.append({"name": lv["name"], "goal": lv["goal"], "w": lv["w"],
                      "h": lv["h"], "cells": lv["cells"]})

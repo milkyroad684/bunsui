@@ -5,6 +5,7 @@ The solver searches every rotation choice that can be reached by water flow.
 It branches when a packet group reaches an unassigned pipe, keeps choices that
 obey the engine rules, and returns the lowest tap-count winning assignment.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -12,9 +13,9 @@ import json
 import os
 import sys
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
-from engine import BASE, DX, DY, conns
+from engine import DX, DY, conns
 
 
 Packet = Dict[str, int]
@@ -63,17 +64,19 @@ class FlowSolver:
             if c["t"] == "src":
                 x, y = map(int, k.split(","))
                 self.srcs.append((x, y, c))
-        self.last_emit = max((c.get("count", 1) - 1) * c.get("period", 1)
-                             for _, _, c in self.srcs)
+        self.last_emit = max(
+            (c.get("count", 1) - 1) * c.get("period", 1) for _, _, c in self.srcs
+        )
         self.best: Optional[SolveResult] = None
         self.metrics = Metrics()
         self.seen = {}
 
     def solve(self) -> SolveResult:
         packets = self._emit(0)
-        fills = {k: 0 for k, c in self.cells.items() if c["t"] == "tank"}
-        self._search(tick=0, packets=packets, fills=fills, rots={}, order=[],
-                     cost=0, depth=0)
+        fills = {k: (0, 0) for k, c in self.cells.items() if c["t"] == "tank"}
+        self._search(
+            tick=0, packets=packets, fills=fills, rots={}, order=[], cost=0, depth=0
+        )
         self.metrics.seen_states = len(self.seen)
         if self.best:
             self.best.metrics = self.metrics
@@ -86,8 +89,15 @@ class FlowSolver:
             period, count = c.get("period", 1), c.get("count", 1)
             if tick % period == 0 and tick // period < count:
                 d = c["dir"]
-                out.append({"x": x + DX[d], "y": y + DY[d],
-                            "frm": (d + 2) % 4, "units": c["units"]})
+                out.append(
+                    {
+                        "x": x + DX[d],
+                        "y": y + DY[d],
+                        "frm": (d + 2) % 4,
+                        "units": c["units"],
+                        "col": c.get("col", 0),
+                    }
+                )
         return out
 
     def _tap_delta(self, key: str, rot: int) -> int:
@@ -103,14 +113,28 @@ class FlowSolver:
             seq.extend([k] * self._tap_delta(k, rots[k]))
         return seq
 
-    def _state_key(self, tick: int, packets: List[Packet], fills: Fill, rots: Rotations):
-        packet_key = tuple(sorted((p["x"], p["y"], p["frm"], p["units"]) for p in packets))
+    def _state_key(
+        self, tick: int, packets: List[Packet], fills: Fill, rots: Rotations
+    ):
+        packet_key = tuple(
+            sorted(
+                (p["x"], p["y"], p["frm"], p["units"], p.get("col", 0)) for p in packets
+            )
+        )
         fill_key = tuple(sorted(fills.items()))
         rot_key = tuple(sorted(rots.items()))
         return tick, packet_key, fill_key, rot_key
 
-    def _search(self, tick: int, packets: List[Packet], fills: Fill, rots: Rotations,
-                order: List[str], cost: int, depth: int):
+    def _search(
+        self,
+        tick: int,
+        packets: List[Packet],
+        fills: Fill,
+        rots: Rotations,
+        order: List[str],
+        cost: int,
+        depth: int,
+    ):
         self.metrics.nodes += 1
         self.metrics.max_depth = max(self.metrics.max_depth, depth)
         if self.best and cost >= self.best.tap_count:
@@ -134,15 +158,32 @@ class FlowSolver:
         group_items = list(groups.items())
         self._resolve_groups(tick, group_items, 0, fills, rots, order, [], cost, depth)
 
-    def _resolve_groups(self, tick: int, group_items, index: int, fills: Fill,
-                        rots: Rotations, order: List[str], moves: List[Move],
-                        cost: int, depth: int):
+    def _resolve_groups(
+        self,
+        tick: int,
+        group_items,
+        index: int,
+        fills: Fill,
+        rots: Rotations,
+        order: List[str],
+        moves: List[Move],
+        cost: int,
+        depth: int,
+    ):
         if index == len(group_items):
             if self._has_collision(moves):
                 self.metrics.failures += 1
                 return
-            next_packets = [{"x": m["x"], "y": m["y"], "frm": m["frm"], "units": m["units"]}
-                            for m in moves]
+            next_packets = [
+                {
+                    "x": m["x"],
+                    "y": m["y"],
+                    "frm": m["frm"],
+                    "units": m["units"],
+                    "col": m["col"],
+                }
+                for m in moves
+            ]
             next_packets.extend(self._emit(tick))
             if not next_packets and tick >= self.last_emit:
                 if self._is_win(fills):
@@ -156,18 +197,26 @@ class FlowSolver:
         (x, y), group = group_items[index]
         c = self.cells.get(f"{x},{y}")
         total = sum(p["units"] for p in group)
+        gcol = 0
+        for p in group:
+            gcol |= p.get("col", 0)
         if c is None or c["t"] == "src":
             self.metrics.failures += 1
             return
         if c["t"] == "tank":
-            new_fills = dict(fills)
             cell_key = f"{x},{y}"
-            new_fills[cell_key] += total
-            if new_fills[cell_key] > c["need"]:
+            amt, col = fills[cell_key]
+            if c.get("col") and (gcol & ~c["col"]):
                 self.metrics.failures += 1
                 return
-            self._resolve_groups(tick, group_items, index + 1, new_fills, rots, order,
-                                 moves, cost, depth)
+            if amt + total > c["need"]:
+                self.metrics.failures += 1
+                return
+            new_fills = dict(fills)
+            new_fills[cell_key] = (amt + total, col | gcol)
+            self._resolve_groups(
+                tick, group_items, index + 1, new_fills, rots, order, moves, cost, depth
+            )
             return
 
         cell_key = f"{x},{y}"
@@ -179,22 +228,48 @@ class FlowSolver:
             self.metrics.rotation_candidates += len(candidates)
 
         for rot in candidates:
-            produced = self._pipe_moves(x, y, c["kind"], rot, group, total)
+            produced = self._pipe_moves(x, y, c["kind"], rot, group, total, gcol)
             if produced is None:
                 continue
             if cell_key in rots:
-                self._resolve_groups(tick, group_items, index + 1, fills, rots, order,
-                                     moves + produced, cost, depth)
+                self._resolve_groups(
+                    tick,
+                    group_items,
+                    index + 1,
+                    fills,
+                    rots,
+                    order,
+                    moves + produced,
+                    cost,
+                    depth,
+                )
             else:
                 new_rots = dict(rots)
                 new_rots[cell_key] = rot
                 new_cost = cost + self._tap_delta(cell_key, rot)
                 new_order = order + [cell_key]
-                self._resolve_groups(tick, group_items, index + 1, fills, new_rots,
-                                     new_order, moves + produced, new_cost, depth)
+                self._resolve_groups(
+                    tick,
+                    group_items,
+                    index + 1,
+                    fills,
+                    new_rots,
+                    new_order,
+                    moves + produced,
+                    new_cost,
+                    depth,
+                )
 
-    def _pipe_moves(self, x: int, y: int, kind: str, rot: int,
-                    group: List[Packet], total: int) -> Optional[List[Move]]:
+    def _pipe_moves(
+        self,
+        x: int,
+        y: int,
+        kind: str,
+        rot: int,
+        group: List[Packet],
+        total: int,
+        gcol: int = 0,
+    ) -> Optional[List[Move]]:
         cs = conns(kind, rot)
         for p in group:
             if p["frm"] not in cs:
@@ -204,20 +279,39 @@ class FlowSolver:
         if not outs or total % len(outs):
             return None
         units = total // len(outs)
-        return [{"fx": x, "fy": y, "x": x + DX[d], "y": y + DY[d],
-                 "frm": (d + 2) % 4, "units": units} for d in outs]
+        return [
+            {
+                "fx": x,
+                "fy": y,
+                "x": x + DX[d],
+                "y": y + DY[d],
+                "frm": (d + 2) % 4,
+                "units": units,
+                "col": gcol,
+            }
+            for d in outs
+        ]
 
     def _has_collision(self, moves: List[Move]) -> bool:
         for i, a in enumerate(moves):
-            for b in moves[i + 1:]:
-                if a["x"] == b["fx"] and a["y"] == b["fy"] \
-                        and b["x"] == a["fx"] and b["y"] == a["fy"]:
+            for b in moves[i + 1 :]:
+                if (
+                    a["x"] == b["fx"]
+                    and a["y"] == b["fy"]
+                    and b["x"] == a["fx"]
+                    and b["y"] == a["fy"]
+                ):
                     return True
         return False
 
     def _is_win(self, fills: Fill) -> bool:
         for k, c in self.cells.items():
-            if c["t"] == "tank" and fills[k] != c["need"]:
+            if c["t"] != "tank":
+                continue
+            amt, col = fills[k]
+            if amt != c["need"]:
+                return False
+            if c.get("col") and col != c["col"]:
                 return False
         return True
 
@@ -238,6 +332,7 @@ def load_levels():
     if here not in sys.path:
         sys.path.insert(0, here)
     from build import build_levels
+
     return build_levels()
 
 
@@ -285,11 +380,15 @@ def result_payload(label: str, result: SolveResult, level_index=None, qa=None):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Solve BUNSUI levels by exhaustive flow DFS.")
+    parser = argparse.ArgumentParser(
+        description="Solve BUNSUI levels by exhaustive flow DFS."
+    )
     parser.add_argument("--level", type=int, help="1-based level number to solve")
     parser.add_argument("--all", action="store_true", help="solve every built level")
     parser.add_argument("--max-ticks", type=int, default=300)
-    parser.add_argument("--json", action="store_true", help="print machine-readable JSON")
+    parser.add_argument(
+        "--json", action="store_true", help="print machine-readable JSON"
+    )
     return parser.parse_args()
 
 
@@ -307,19 +406,27 @@ def main():
         result = solve(lv, max_ticks=args.max_ticks)
         outputs.append(result_payload(game[i]["name"], result, i, qa))
     if args.json:
-        print(json.dumps(outputs if args.all else outputs[0], ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                outputs if args.all else outputs[0], ensure_ascii=False, indent=2
+            )
+        )
         return
     for out in outputs:
         m = out["metrics"]
         print(f"{out['level']}: {'SOLVED' if out['solved'] else 'UNSOLVABLE'}")
         print(f"  solution length: {out['solution_length']} taps, tick={out['tick']}")
-        print(f"  search space: {m['search_space_size']} nodes, "
-              f"branching={m['average_branching_factor']:.2f}, "
-              f"wins={m['wins']}, failures={m['failures']}, pruned={m['pruned']}")
+        print(
+            f"  search space: {m['search_space_size']} nodes, "
+            f"branching={m['average_branching_factor']:.2f}, "
+            f"wins={m['wins']}, failures={m['failures']}, pruned={m['pruned']}"
+        )
         if "known_solution_comparison" in out:
             cmp = out["known_solution_comparison"]
             print(f"  known comparison: {cmp['message']}")
-        print(f"  rotations: {json.dumps(out['rotations'], ensure_ascii=False, sort_keys=True)}")
+        print(
+            f"  rotations: {json.dumps(out['rotations'], ensure_ascii=False, sort_keys=True)}"
+        )
         print(f"  taps: {' '.join(out['tap_sequence'])}")
 
 

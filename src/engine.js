@@ -10,7 +10,7 @@ function conns(c){return BASE[c.kind].map(d=>(d+c.rot)%4)}
 function newSim(level,rots){
   const cells={};
   for(const k in level.cells){cells[k]=Object.assign({},level.cells[k]);
-    if(cells[k].t==="tank")cells[k].fill=0;
+    if(cells[k].t==="tank"){cells[k].fill=0;cells[k].fillcol=0;}
     if(rots&&rots[k]!==undefined)cells[k].rot=rots[k];}
   const srcs=[];let lastEmit=0;
   for(const k in cells){const c=cells[k];
@@ -19,7 +19,7 @@ function newSim(level,rots){
   function emit(t){const out=[];
     for(const s of srcs){const per=s.c.period||1,cnt=s.c.count||1;
       if(t%per===0&&t/per<cnt){const d=s.c.dir;
-        out.push({x:s.x+DX[d],y:s.y+DY[d],frm:(d+2)%4,units:s.c.units});}}
+        out.push({x:s.x+DX[d],y:s.y+DY[d],frm:(d+2)%4,units:s.c.units,col:s.c.col||0});}}
     return out;}
   return{cells,emit,lastEmit,tick:0,packets:emit(0),done:false};
 }
@@ -31,9 +31,12 @@ function stepSim(sim){
   const moves=[];
   for(const k in groups){
     const g=groups[k],parts=k.split(","),x=+parts[0],y=+parts[1];
-    const total=g.reduce((s,p)=>s+p.units,0);const c=sim.cells[k];
+    const total=g.reduce((s,p)=>s+p.units,0);
+    const gcol=g.reduce((s,p)=>s|(p.col||0),0);const c=sim.cells[k];
     if(!c){sim.done=true;return{fail:{msg:"漏水：パイプのない場所へ水があふれた",x,y},wet}}
-    if(c.t==="tank"){c.fill+=total;
+    if(c.t==="tank"){
+      if(c.col&&(gcol&~c.col)){sim.done=true;return{fail:{msg:"色違い：要求にない色が混ざった",x,y},wet}}
+      c.fill+=total;c.fillcol=(c.fillcol||0)|gcol;
       if(c.fill>c.need){sim.done=true;return{fail:{msg:"あふれた：タンクは要求量ぴったりで止める",x,y},wet}}
       continue;}
     if(c.t==="src"){sim.done=true;return{fail:{msg:"逆流：水が水源へ戻った",x,y},wet}}
@@ -45,18 +48,20 @@ function stepSim(sim){
     if(total%outs.length){sim.done=true;
       return{fail:{msg:"破裂："+total+"単位は"+outs.length+"方向に割り切れない",x,y},wet}}
     const per=total/outs.length;wet.push({k,dirs:[...inc,...outs]});
-    for(const d of outs)moves.push({fx:x,fy:y,x:x+DX[d],y:y+DY[d],frm:(d+2)%4,units:per});
+    for(const d of outs)moves.push({fx:x,fy:y,x:x+DX[d],y:y+DY[d],frm:(d+2)%4,units:per,col:gcol});
   }
   for(const a of moves)for(const b of moves)
     if(a!==b&&a.x===b.fx&&a.y===b.fy&&b.x===a.fx&&b.y===a.fy){
       sim.done=true;return{fail:{msg:"正面衝突：合流は同着のときだけ成立する",x:a.fx,y:a.fy},wet}}
-  sim.packets=moves.map(m=>({x:m.x,y:m.y,frm:m.frm,units:m.units}));
+  sim.packets=moves.map(m=>({x:m.x,y:m.y,frm:m.frm,units:m.units,col:m.col}));
   for(const p of sim.emit(sim.tick))sim.packets.push(p);
   if(!sim.packets.length&&sim.tick>=sim.lastEmit){
-    sim.done=true;let ok=true;
-    for(const k in sim.cells){const c=sim.cells[k];if(c.t==="tank"&&c.fill!==c.need)ok=false;}
+    sim.done=true;let ok=true,colorBad=false;
+    for(const k in sim.cells){const c=sim.cells[k];if(c.t==="tank"){
+      if(c.fill!==c.need)ok=false;
+      else if(c.col&&(c.fillcol||0)!==c.col){ok=false;colorBad=true;}}}
     if(ok)return{win:true,wet};
-    return{fail:{msg:"水量不足：すべてのタンクをぴったり満たそう",x:-1,y:-1},wet};
+    return{fail:{msg:colorBad?"色が違う：要求の色をぴったり作ろう":"水量不足：すべてのタンクをぴったり満たそう",x:-1,y:-1},wet};
   }
   return{wet};
 }

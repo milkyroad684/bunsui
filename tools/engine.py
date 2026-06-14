@@ -39,6 +39,7 @@ def simulate(level, rots=None, max_ticks=300, trace=False):
             srcs.append((x, y, c))
         if c["t"] == "tank":
             c["fill"] = 0
+            c["fillcol"] = 0
     last_emit = max((c.get("count", 1) - 1) * c.get("period", 1) for _, _, c in srcs)
 
     def emit(t):
@@ -47,8 +48,15 @@ def simulate(level, rots=None, max_ticks=300, trace=False):
             per, cnt = c.get("period", 1), c.get("count", 1)
             if t % per == 0 and t // per < cnt:
                 d = c["dir"]
-                out.append({"x": x + DX[d], "y": y + DY[d], "frm": (d + 2) % 4,
-                            "units": c["units"]})
+                out.append(
+                    {
+                        "x": x + DX[d],
+                        "y": y + DY[d],
+                        "frm": (d + 2) % 4,
+                        "units": c["units"],
+                        "col": c.get("col", 0),
+                    }
+                )
         return out
 
     packets = emit(0)
@@ -64,64 +72,127 @@ def simulate(level, rots=None, max_ticks=300, trace=False):
         moves = []
         for (x, y), g in groups.items():
             total = sum(p["units"] for p in g)
+            gcol = 0
+            for p in g:
+                gcol |= p.get("col", 0)
             c = cells.get(f"{x},{y}")
             if c is None:
                 return {"result": f"leak at ({x},{y})", "tick": tick, "log": log}
             if c["t"] == "tank":
+                if c.get("col") and (gcol & ~c["col"]):
+                    return {
+                        "result": f"colorclash at ({x},{y})",
+                        "tick": tick,
+                        "log": log,
+                    }
                 c["fill"] += total
+                c["fillcol"] = c.get("fillcol", 0) | gcol
                 if c["fill"] > c["need"]:
-                    return {"result": f"overflow at ({x},{y}) fill={c['fill']}>{c['need']}",
-                            "tick": tick, "log": log}
+                    return {
+                        "result": f"overflow at ({x},{y}) fill={c['fill']}>{c['need']}",
+                        "tick": tick,
+                        "log": log,
+                    }
                 continue
             if c["t"] == "src":
                 return {"result": f"backflow at ({x},{y})", "tick": tick, "log": log}
             cs = conns(c["kind"], c["rot"])
             for p in g:
                 if p["frm"] not in cs:
-                    return {"result": f"leak(port) at ({x},{y}) frm={p['frm']}",
-                            "tick": tick, "log": log}
+                    return {
+                        "result": f"leak(port) at ({x},{y}) frm={p['frm']}",
+                        "tick": tick,
+                        "log": log,
+                    }
             inc = {p["frm"] for p in g}
             outs = [d for d in cs if d not in inc]
             if not outs:
                 return {"result": f"deadend at ({x},{y})", "tick": tick, "log": log}
             if total % len(outs):
-                return {"result": f"burst at ({x},{y}) {total}%{len(outs)}",
-                        "tick": tick, "log": log}
+                return {
+                    "result": f"burst at ({x},{y}) {total}%{len(outs)}",
+                    "tick": tick,
+                    "log": log,
+                }
             per = total // len(outs)
             for d in outs:
-                moves.append({"fx": x, "fy": y, "x": x + DX[d], "y": y + DY[d],
-                              "frm": (d + 2) % 4, "units": per})
+                moves.append(
+                    {
+                        "fx": x,
+                        "fy": y,
+                        "x": x + DX[d],
+                        "y": y + DY[d],
+                        "frm": (d + 2) % 4,
+                        "units": per,
+                        "col": gcol,
+                    }
+                )
         for a in moves:
             for b in moves:
-                if a is not b and a["x"] == b["fx"] and a["y"] == b["fy"] \
-                        and b["x"] == a["fx"] and b["y"] == a["fy"]:
-                    return {"result": f"collision ({a['fx']},{a['fy']})<->({b['fx']},{b['fy']})",
-                            "tick": tick, "log": log}
-        packets = [{"x": m["x"], "y": m["y"], "frm": m["frm"], "units": m["units"]}
-                   for m in moves]
+                if (
+                    a is not b
+                    and a["x"] == b["fx"]
+                    and a["y"] == b["fy"]
+                    and b["x"] == a["fx"]
+                    and b["y"] == a["fy"]
+                ):
+                    return {
+                        "result": f"collision ({a['fx']},{a['fy']})<->({b['fx']},{b['fy']})",
+                        "tick": tick,
+                        "log": log,
+                    }
+        packets = [
+            {
+                "x": m["x"],
+                "y": m["y"],
+                "frm": m["frm"],
+                "units": m["units"],
+                "col": m["col"],
+            }
+            for m in moves
+        ]
         packets += emit(tick)
         if trace:
             log.append((tick, [(p["x"], p["y"], p["units"]) for p in packets]))
         if not packets and tick >= last_emit:
-            tanks = {k: (c["fill"], c["need"]) for k, c in cells.items() if c["t"] == "tank"}
-            ok = all(f == n for f, n in tanks.values())
-            return {"result": "WIN" if ok else f"underfill {tanks}", "tick": tick, "log": log}
+            ok = True
+            color_bad = False
+            for k, c in cells.items():
+                if c["t"] != "tank":
+                    continue
+                if c["fill"] != c["need"]:
+                    ok = False
+                elif c.get("col") and c.get("fillcol", 0) != c["col"]:
+                    ok = False
+                    color_bad = True
+            if ok:
+                return {"result": "WIN", "tick": tick, "log": log}
+            return {
+                "result": "colorfail" if color_bad else "underfill",
+                "tick": tick,
+                "log": log,
+            }
 
 
 def P(kind, rot):
     return {"t": "pipe", "kind": kind, "rot": rot}
 
 
-def SRC(d, units, count=1, period=1):
+def SRC(d, units, count=1, period=1, col=0):
     s = {"t": "src", "dir": d, "units": units}
     if count > 1:
         s["count"] = count
         s["period"] = period
+    if col:
+        s["col"] = col
     return s
 
 
-def TANK(need):
-    return {"t": "tank", "need": need}
+def TANK(need, col=0):
+    t = {"t": "tank", "need": need}
+    if col:
+        t["col"] = col
+    return t
 
 
 def check(name, level, solution, expect="WIN"):

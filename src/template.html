@@ -86,7 +86,7 @@ details p span.t{color:var(--brass)}
 <header>
   <span class="brand">分水</span>
   <span class="romaji">B U N S U I</span>
-  <span class="tagline">整除・同着・仮説 — 給排水設計演習 十五図</span>
+  <span class="tagline">整除・同着・仮説・色 — 給排水設計演習 二十図</span>
   <span class="progress" id="progress"></span>
 </header>
 <div class="app">
@@ -116,6 +116,7 @@ details p span.t{color:var(--brass)}
       <p><span class="t">流れ。</span>水は整数単位の塊として、1ティックに1マス進む。塊が部品に入ると、入ってきた口を除く残りの口へ均等に分かれる。割り切れなければ破裂。出口がなければ行き止まり。口のない面に当たれば漏水。</p>
       <p><span class="t">合流。</span>複数の塊が同じティックに同じ部品へ着いたときだけ合算される。1ティックでもずれれば、すれ違いの正面衝突や思わぬ分流が起きる。経路長 = 到着ティック。図面の縮尺は「1マス = 1ティック」。</p>
       <p><span class="t">脈動水源。</span>「2×3 / T4」とあれば、2単位の塊を4ティックおきに3回送り出す。すべての波が同じ配管を通る。</p>
+      <p><span class="t">色。</span>水源には色がある（赤・黄・青）。複数の色が同じ部品へ同着すると混ざる——赤＋青＝紫、黄＋青＝緑、赤＋黄＝橙、三色そろえば茶。分流しても色は変わらない。色付きタンクは量だけでなく色もぴったりで合格。要求にない色が混ざると不合格。</p>
       <p><span class="t">完成条件。</span>すべてのタンクが要求量ぴったりで、盤上に水が残っていないこと。多くても少なくても不合格。使われないパイプがあっても、水さえ入らなければ問題ない。</p>
     </details>
   </main>
@@ -126,6 +127,10 @@ const LEVELS=__LEVELS__;
 __ENGINE__
 
 const S=64,M=20,TB=54;
+/* color bits R=1 Y=2 B=4 -> CSS. 0=無色（従来の水）。混色は OR で合成。 */
+const COL={0:"var(--water)",1:"#F1603D",2:"#E8C84A",4:"#4FA8E8",
+  3:"#F0913A",6:"#6FCB7A",5:"#B47BD8",7:"#B98A5E"};
+function colOf(c){return COL[c||0]||"var(--water)"}
 const store={
   get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},
   set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
@@ -192,27 +197,30 @@ function render(){
       if(wetMap[k])s+=pipePath(cx,cy,[...wetMap[k]].filter(d=>cs.includes(d)),"var(--water)",5);
     }
     if(c.t==="src"){
-      s+='<circle cx="'+cx+'" cy="'+cy+'" r="23" fill="var(--paper-deep)" stroke="var(--mint)" stroke-width="2"/>';
-      s+='<circle cx="'+cx+'" cy="'+cy+'" r="19" fill="none" stroke="var(--mint)" stroke-width="1"/>';
-      if(wetMap[k])s+=pipePath(cx,cy,[...wetMap[k]],"var(--water)",5);
+      const sc=c.col?colOf(c.col):"var(--mint)";
+      s+='<circle cx="'+cx+'" cy="'+cy+'" r="23" fill="var(--paper-deep)" stroke="'+sc+'" stroke-width="2"/>';
+      s+='<circle cx="'+cx+'" cy="'+cy+'" r="19" fill="none" stroke="'+sc+'" stroke-width="1"/>';
+      if(wetMap[k])s+=pipePath(cx,cy,[...wetMap[k]],c.col?sc:"var(--water)",5);
       const lbl=(c.count||1)>1?c.units+"×"+c.count:String(c.units);
-      s+='<text x="'+cx+'" y="'+(cy+((c.count||1)>1?2:5))+'" text-anchor="middle" font-family="var(--mono)" font-size="'+((c.count||1)>1?13:16)+'" fill="var(--mint)">'+lbl+'</text>';
-      if((c.count||1)>1)s+='<text x="'+cx+'" y="'+(cy+15)+'" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--mint)">T'+c.period+'</text>';
+      s+='<text x="'+cx+'" y="'+(cy+((c.count||1)>1?2:5))+'" text-anchor="middle" font-family="var(--mono)" font-size="'+((c.count||1)>1?13:16)+'" fill="'+sc+'">'+lbl+'</text>';
+      if((c.count||1)>1)s+='<text x="'+cx+'" y="'+(cy+15)+'" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="'+sc+'">T'+c.period+'</text>';
       const a=(c.dir-1)*90;
-      s+='<g transform="rotate('+a+' '+cx+' '+cy+')"><polygon points="'+(cx+24)+','+(cy-6)+' '+(cx+24)+','+(cy+6)+' '+(cx+31)+','+cy+'" fill="var(--mint)"/></g>';
+      s+='<g transform="rotate('+a+' '+cx+' '+cy+')"><polygon points="'+(cx+24)+','+(cy-6)+' '+(cx+24)+','+(cy+6)+' '+(cx+31)+','+cy+'" fill="'+sc+'"/></g>';
     }
     if(c.t==="tank"){
       const fill=c.fill||0,ih=S-26,r=Math.min(1,fill/c.need),wh=Math.round(ih*r);
-      s+='<rect x="'+(x*S+10)+'" y="'+(y*S+8)+'" width="'+(S-20)+'" height="'+(S-16)+'" fill="var(--paper-deep)" stroke="var(--brass)" stroke-width="2"/>';
-      s+='<rect x="'+(x*S+14)+'" y="'+(y*S+12)+'" width="'+(S-28)+'" height="'+(S-24)+'" fill="none" stroke="var(--brass)" stroke-width="1"/>';
-      if(wh>0)s+='<rect x="'+(x*S+16)+'" y="'+(y*S+13+(ih-wh))+'" width="'+(S-32)+'" height="'+wh+'" fill="var(--water-deep)"/>';
+      const tc=c.col?colOf(c.col):"var(--brass)";
+      const wc=c.col?colOf(c.fillcol||c.col):"var(--water-deep)";
+      s+='<rect x="'+(x*S+10)+'" y="'+(y*S+8)+'" width="'+(S-20)+'" height="'+(S-16)+'" fill="var(--paper-deep)" stroke="'+tc+'" stroke-width="2"/>';
+      s+='<rect x="'+(x*S+14)+'" y="'+(y*S+12)+'" width="'+(S-28)+'" height="'+(S-24)+'" fill="none" stroke="'+tc+'" stroke-width="1"/>';
+      if(wh>0)s+='<rect x="'+(x*S+16)+'" y="'+(y*S+13+(ih-wh))+'" width="'+(S-32)+'" height="'+wh+'" fill="'+wc+'"/>';
       s+='<rect x="'+(cx-17)+'" y="'+(cy-8)+'" width="34" height="16" fill="var(--paper)" opacity=".92"/>';
       s+='<text x="'+cx+'" y="'+(cy+4)+'" text-anchor="middle" font-family="var(--mono)" font-size="11.5" fill="var(--line)">'+fill+"/"+c.need+'</text>';
     }
   }
   if(sim)for(const p of sim.packets){
     const cx=p.x*S+S/2,cy=p.y*S+S/2;
-    s+='<circle cx="'+cx+'" cy="'+cy+'" r="13" fill="var(--water)" stroke="var(--paper)" stroke-width="2"/>';
+    s+='<circle cx="'+cx+'" cy="'+cy+'" r="13" fill="'+colOf(p.col)+'" stroke="var(--paper)" stroke-width="2"/>';
     s+='<text x="'+cx+'" y="'+(cy+4.5)+'" text-anchor="middle" font-family="var(--mono)" font-size="12.5" fill="var(--ink)">'+p.units+'</text>';
   }
   if(failPos){
